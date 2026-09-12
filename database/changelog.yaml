@@ -1,0 +1,14 @@
+databaseChangeLog:
+  # Include all SQL files for schema creation or updates (always run)
+  - includeAll:
+      path: sql
+      relativeToChangelogFile: true
+  # Include all SQL files for seeding data
+  - includeAll:
+      path: seed
+      relativeToChangelogFile: true      
+  # Include all SQL files for seeding data (only run in dev environment)
+  - includeAll:
+      path: dev
+      relativeToChangelogFile: true
+      contextFilter: dev

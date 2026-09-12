@@ -1,0 +1,107 @@
+.main {
+  min-height: 100%;
+  background: radial-gradient(circle at top left, rgba(20, 92, 84, 0.14), transparent 32%),
+    linear-gradient(180deg, #fffefb 0%, #f5efe4 54%, #ece3d6 100%);
+  padding: 2.5rem 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .main {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .main {
+    padding-left: 3rem;
+    padding-right: 3rem;
+  }
+}
+
+.shell {
+  margin: 0 auto;
+  width: 100%;
+  max-width: 72rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.hero {
+  border-radius: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.84);
+  padding: 2rem;
+  box-shadow: 0 20px 72px rgba(92, 71, 43, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+.eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: rgb(120 113 108);
+}
+
+.title {
+  margin-top: 0.75rem;
+  font-size: 2rem;
+  line-height: 2.25rem;
+  font-weight: 600;
+  color: rgb(28 25 23);
+}
+
+.description {
+  margin-top: 0.75rem;
+  max-width: 46rem;
+  color: rgb(87 83 78);
+  line-height: 1.75rem;
+}
+
+.actions {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.primaryButton {
+  background: rgb(20 92 84);
+  color: white;
+}
+
+.primaryButton:hover {
+  background: rgb(15 75 69);
+}
+
+.cards {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.card {
+  border-radius: 1.5rem;
+  border: 1px solid rgb(231 229 228);
+  background: rgba(255, 255, 255, 0.86);
+  padding: 1.25rem;
+}
+
+.cardTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgb(41 37 36);
+}
+
+.cardText {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  color: rgb(87 83 78);
+}

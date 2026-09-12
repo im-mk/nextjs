@@ -1,0 +1,99 @@
+.formShell {
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 2rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 241, 233, 0.96));
+  box-shadow: 0 30px 120px rgba(33, 24, 13, 0.2);
+  backdrop-filter: blur(8px);
+  padding: 1.5rem;
+}
+
+.dialogContent {
+  padding: 2rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .dialogContent {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+@media (min-width: 640px) {
+  .formShell {
+    padding: 1.75rem;
+  }
+}
+
+.headerRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.eyebrow {
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: rgb(120 113 108);
+}
+
+.modalTitle {
+  margin-top: 0.5rem;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+  color: rgb(28 25 23);
+}
+
+.modalDescription {
+  margin-top: 0.5rem;
+  max-width: 36rem;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  color: rgb(87 83 78);
+}
+
+.apiErrorStack {
+  margin-bottom: 1rem;
+  border: 1px solid rgba(153, 27, 27, 0.28);
+  border-radius: 1rem;
+  background: rgba(254, 226, 226, 0.9);
+  padding: 0.85rem 1rem;
+  box-shadow: 0 8px 24px rgba(127, 29, 29, 0.08);
+}
+
+.apiErrorTitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(153 27 27);
+}
+
+.apiErrorMessage {
+  margin-top: 0.35rem;
+  font-size: 0.92rem;
+  line-height: 1.5rem;
+  color: rgb(127 29 29);
+}
+
+.fieldsGrid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .fieldsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.actions {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}

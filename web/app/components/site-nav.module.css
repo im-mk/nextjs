@@ -1,0 +1,69 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid rgba(231, 229, 228, 0.7);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+}
+
+.nav {
+  margin: 0 auto;
+  display: flex;
+  width: 100%;
+  max-width: 72rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .nav {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .nav {
+    padding-left: 3rem;
+    padding-right: 3rem;
+  }
+}
+
+.brand {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: rgb(28 25 23);
+}
+
+.list {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  border: 1px solid rgb(231 229 228);
+  border-radius: 9999px;
+  background: rgba(245, 245, 244, 0.7);
+  padding: 0.25rem;
+}
+
+.itemButton {
+  border: 0;
+  box-shadow: none;
+}
+
+.active {
+  background: rgb(28 25 23);
+  color: rgb(250 250 249);
+}
+
+.inactive {
+  color: rgb(68 64 60);
+}
+
+.inactive:hover {
+  background: rgb(255 255 255);
+  color: rgb(28 25 23);
+}
