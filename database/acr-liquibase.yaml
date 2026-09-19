@@ -1,0 +1,7 @@
+version: v1.1.0
+steps:
+  - cmd: $Registry/liquibase-migration:latest -c 'liquibase --url=jdbc:postgresql://app-api-env-db.postgres.database.azure.com:5432/app?sslmode=require --username=appadmin --password=$DB_PASSWORD --changeLogFile=/migration/changelog.yaml update'
+    entryPoint: sh
+    workingDirectory: /workspace
+    env:
+      - DB_PASSWORD={{.Values.DB_PASSWORD}}

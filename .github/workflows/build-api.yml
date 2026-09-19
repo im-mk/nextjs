@@ -1,0 +1,78 @@
+name: Build API
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "GitHub environment to run the build under (production/preview)"
+        required: true
+        type: string
+      container_registry_name:
+        description: "Name of the Azure Container Registry to push the API image to"
+        required: true
+        type: string
+      container_registry_login_server:
+        description: "Login server (e.g. foo.azurecr.io) of the Azure Container Registry"
+        required: true
+        type: string
+      image_tag:
+        description: "Tag applied to the API image"
+        required: true
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - ".github/workflows/build-api.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write # Azure OIDC
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_call' && inputs.environment || 'production' }}
+    env:
+      CONTAINER_REGISTRY_NAME: ${{ github.event_name == 'workflow_call' && inputs.container_registry_name || vars.ACR_NAME }}
+      CONTAINER_REGISTRY_LOGIN_SERVER: ${{ github.event_name == 'workflow_call' && inputs.container_registry_login_server || vars.ACR_LOGIN_SERVER }}
+      IMAGE_TAG: ${{ github.event_name == 'workflow_call' && inputs.image_tag || github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to Azure Container Registry
+        run: az acr login --name "$CONTAINER_REGISTRY_NAME"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          {
+            echo 'value<<EOF'
+            echo "$CONTAINER_REGISTRY_LOGIN_SERVER/app-api:$IMAGE_TAG"
+            if [[ "${{ github.event_name }}" != "workflow_call" ]]; then
+              echo "$CONTAINER_REGISTRY_LOGIN_SERVER/app-api:latest"
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          file: ./api/App.Api/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.value }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,52 @@
+name: Teardown Branch
+
+# Run this for the branch you want to tear down.
+# Feature branches delete their whole resource group.
+# main only deletes the shared app container apps.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_branch:
+        description: "Type the exact branch name to confirm teardown"
+        required: true
+
+permissions:
+  id-token: write # Azure OIDC
+  contents: read
+
+jobs:
+  teardown:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'preview' }}
+    steps:
+      - name: Verify confirmation
+        run: |
+          if [[ "${{ inputs.confirm_branch }}" != "${{ github.ref_name }}" ]]; then
+            echo "::error::confirm_branch ('${{ inputs.confirm_branch }}') does not match the branch this workflow was run from ('${{ github.ref_name }}')."
+            exit 1
+          fi
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Tear down
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          if [[ "$BRANCH" == "main" ]]; then
+            RESOURCE_GROUP="${{ vars.AZURE_RESOURCE_GROUP }}"
+            az containerapp delete -g "$RESOURCE_GROUP" -n app-web --yes || true
+            az containerapp delete -g "$RESOURCE_GROUP" -n app-api --yes || true
+          else
+            PREFIX=$(echo "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9]+#-#g' | sed -E 's#^-+|-+$##g' | cut -c1-20)
+            if [[ -z "$PREFIX" ]]; then
+              PREFIX="branch"
+            fi
+            HASH=$(printf '%s' "$BRANCH" | sha256sum | cut -c1-8)
+            SLUG="$PREFIX-$HASH"
+            RESOURCE_GROUP="${{ vars.AZURE_RESOURCE_GROUP }}-$SLUG"
+            az group delete -n "$RESOURCE_GROUP" --yes
+          fi

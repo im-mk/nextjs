@@ -1,0 +1,130 @@
+name: Deploy App (reusable)
+
+on:
+    workflow_call:
+        inputs:
+            environment:
+                description: "GitHub environment to run the deployment under (production/preview)"
+                required: true
+                type: string
+            resource_group:
+                description: "Resource group containing the foundation (registry, environment, db, key vault, garage) to deploy into"
+                required: true
+                type: string
+            deployment_name:
+                description: "Name for the `az deployment group create` operation"
+                required: true
+                type: string
+            container_registry_name:
+                description: "Name of the Azure Container Registry to build/push images to"
+                required: true
+                type: string
+            container_registry_login_server:
+                description: "Login server (e.g. foo.azurecr.io) of the Azure Container Registry"
+                required: true
+                type: string
+            container_app_name:
+                description: "Name of the API container app"
+                required: true
+                type: string
+            web_app_name:
+                description: "Name of the web container app"
+                required: true
+                type: string
+            image_tag:
+                description: "Tag applied to both the app-api and app-web images"
+                required: true
+                type: string
+        outputs:
+            web_url:
+                description: "Public URL of the deployed web app"
+                value: ${{ jobs.deploy.outputs.web_url }}
+
+permissions:
+    id-token: write # Azure OIDC
+    contents: read
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        environment: ${{ inputs.environment }}
+        outputs:
+            web_url: ${{ steps.web-url.outputs.url }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Log in to Azure
+              uses: azure/login@v2
+              with:
+                  client-id: ${{ secrets.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+                  subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+            # Deploy API first for the web build.
+            - name: Deploy API container app via Bicep
+              run: |
+                  RESOURCE_GROUP="${{ inputs.resource_group }}"
+
+                  CONTAINER_APP_IDENTITY_ID=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.containerAppIdentityResourceId.value -o tsv)
+                  DATABASE_CONNECTION_STRING_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.databaseConnectionStringSecretUri.value -o tsv)
+                  OBJECT_STORAGE_SERVICE_URL=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageServiceUrl.value -o tsv)
+                  OBJECT_STORAGE_PUBLIC_SERVICE_URL=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garagePublicServiceUrl.value -o tsv)
+                  OBJECT_STORAGE_ACCESS_KEY_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageAccessKeySecretUri.value -o tsv)
+                  OBJECT_STORAGE_SECRET_KEY_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageSecretKeySecretUri.value -o tsv)
+                  OBJECT_STORAGE_BUCKET=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageBucket.value -o tsv)
+
+                  az deployment group create -g "$RESOURCE_GROUP" -n "${{ inputs.deployment_name }}" -f infra/azure/main.bicep \
+                    -p containerRegistryName="${{ inputs.container_registry_name }}" \
+                       containerAppIdentityResourceId="$CONTAINER_APP_IDENTITY_ID" \
+                       containerAppName="${{ inputs.container_app_name }}" \
+                       webAppName="${{ inputs.web_app_name }}" \
+                       image="${{ inputs.container_registry_login_server }}/app-api:${{ inputs.image_tag }}" \
+                       databaseConnectionStringSecretUri="$DATABASE_CONNECTION_STRING_SECRET_URI" \
+                       objectStorageServiceUrl="$OBJECT_STORAGE_SERVICE_URL" \
+                       objectStoragePublicServiceUrl="$OBJECT_STORAGE_PUBLIC_SERVICE_URL" \
+                       objectStorageAccessKeySecretUri="$OBJECT_STORAGE_ACCESS_KEY_SECRET_URI" \
+                       objectStorageSecretKeySecretUri="$OBJECT_STORAGE_SECRET_KEY_SECRET_URI" \
+                       objectStorageBucket="$OBJECT_STORAGE_BUCKET"
+
+            - name: Build and push web image
+              run: |
+                  RESOURCE_GROUP="${{ inputs.resource_group }}"
+                  API_HOST=$(az containerapp show -g "$RESOURCE_GROUP" -n "${{ inputs.container_app_name }}" --query properties.configuration.ingress.fqdn -o tsv)
+                  az acr build --registry "${{ inputs.container_registry_name }}" \
+                    --image "${{ inputs.container_registry_login_server }}/app-web:${{ inputs.image_tag }}" \
+                    --file web/Dockerfile \
+                    --build-arg "NEXT_PUBLIC_API_BASE_URL=https://${API_HOST}" \
+                    web
+
+            - name: Deploy web container app via Bicep
+              run: |
+                  RESOURCE_GROUP="${{ inputs.resource_group }}"
+                  CONTAINER_APP_IDENTITY_ID=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.containerAppIdentityResourceId.value -o tsv)
+                  DATABASE_CONNECTION_STRING_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.databaseConnectionStringSecretUri.value -o tsv)
+                  OBJECT_STORAGE_SERVICE_URL=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageServiceUrl.value -o tsv)
+                  OBJECT_STORAGE_PUBLIC_SERVICE_URL=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garagePublicServiceUrl.value -o tsv)
+                  OBJECT_STORAGE_ACCESS_KEY_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageAccessKeySecretUri.value -o tsv)
+                  OBJECT_STORAGE_SECRET_KEY_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageSecretKeySecretUri.value -o tsv)
+                  OBJECT_STORAGE_BUCKET=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageBucket.value -o tsv)
+
+                  az deployment group create -g "$RESOURCE_GROUP" -n "${{ inputs.deployment_name }}" -f infra/azure/main.bicep \
+                    -p containerRegistryName="${{ inputs.container_registry_name }}" \
+                       containerAppIdentityResourceId="$CONTAINER_APP_IDENTITY_ID" \
+                       containerAppName="${{ inputs.container_app_name }}" \
+                       webAppName="${{ inputs.web_app_name }}" \
+                       image="${{ inputs.container_registry_login_server }}/app-api:${{ inputs.image_tag }}" \
+                       webImage="${{ inputs.container_registry_login_server }}/app-web:${{ inputs.image_tag }}" \
+                       databaseConnectionStringSecretUri="$DATABASE_CONNECTION_STRING_SECRET_URI" \
+                       objectStorageServiceUrl="$OBJECT_STORAGE_SERVICE_URL" \
+                       objectStoragePublicServiceUrl="$OBJECT_STORAGE_PUBLIC_SERVICE_URL" \
+                       objectStorageAccessKeySecretUri="$OBJECT_STORAGE_ACCESS_KEY_SECRET_URI" \
+                       objectStorageSecretKeySecretUri="$OBJECT_STORAGE_SECRET_KEY_SECRET_URI" \
+                       objectStorageBucket="$OBJECT_STORAGE_BUCKET"
+
+            - name: Get web URL
+              id: web-url
+              run: |
+                  RESOURCE_GROUP="${{ inputs.resource_group }}"
+                  WEB_HOST=$(az containerapp show -g "$RESOURCE_GROUP" -n "${{ inputs.web_app_name }}" --query properties.configuration.ingress.fqdn -o tsv)
+                  echo "url=https://${WEB_HOST}" >> "$GITHUB_OUTPUT"

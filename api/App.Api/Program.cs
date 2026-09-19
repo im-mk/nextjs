@@ -38,8 +38,6 @@ Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 var app = builder.Build();
 
-await EnsureBucketCorsConfigured(app);
-
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger(c =>
@@ -69,7 +67,9 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.Run();
+await app.StartAsync();
+await EnsureBucketCorsConfigured(app);
+await app.WaitForShutdownAsync();
 
 
 static void SetupDb(WebApplicationBuilder builder)
@@ -93,11 +93,18 @@ static void AddFusionCache(WebApplicationBuilder builder)
 
 static void AddCors(WebApplicationBuilder builder)
 {
+    var allowedOrigins = new[]
+    {
+        "http://localhost:3000",
+        "http://localhost:8090",
+        builder.Configuration["Cors:WebOrigin"] ?? string.Empty
+    }.Where(origin => !string.IsNullOrWhiteSpace(origin)).ToArray();
+
     builder.Services.AddCors(options =>
     {
         options.AddDefaultPolicy(policy =>
         {
-            policy.WithOrigins("http://localhost:3000", "http://localhost:8090")
+            policy.WithOrigins(allowedOrigins)
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .WithExposedHeaders("X-Request-Id", "X-Total-Count", "X-Page", "X-Page-Size");

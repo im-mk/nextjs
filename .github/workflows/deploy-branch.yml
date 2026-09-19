@@ -1,0 +1,117 @@
+name: Deploy Branch
+
+# Run this for the branch you want to deploy.
+# main uses the shared foundation.
+# Other branches get isolated resource groups.
+on:
+    workflow_dispatch: {}
+
+permissions:
+    id-token: write # Azure OIDC
+    contents: read
+
+jobs:
+    resolve:
+        runs-on: ubuntu-latest
+        outputs:
+            is_main: ${{ steps.names.outputs.is_main }}
+            slug: ${{ steps.names.outputs.slug }}
+            resource_group: ${{ steps.names.outputs.resource_group }}
+            location: ${{ steps.names.outputs.location }}
+        steps:
+            - name: Compute names for this branch
+              id: names
+              run: |
+                  BRANCH="${{ github.ref_name }}"
+                  LOCATION="${{ vars.AZURE_LOCATION || 'uksouth' }}"
+                  echo "location=$LOCATION" >> "$GITHUB_OUTPUT"
+
+                  if [[ "$BRANCH" == "main" ]]; then
+                    echo "is_main=true" >> "$GITHUB_OUTPUT"
+                    echo "resource_group=${{ vars.AZURE_RESOURCE_GROUP }}" >> "$GITHUB_OUTPUT"
+                  else
+                                        # Add a hash to avoid branch name collisions.
+                                        PREFIX=$(echo "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9]+#-#g' | sed -E 's#^-+|-+$##g' | cut -c1-20)
+                                        if [[ -z "$PREFIX" ]]; then
+                                            PREFIX="branch"
+                                        fi
+                                        HASH=$(printf '%s' "$BRANCH" | sha256sum | cut -c1-8)
+                                        SLUG="$PREFIX-$HASH"
+                    echo "is_main=false" >> "$GITHUB_OUTPUT"
+                    echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+                    echo "resource_group=${{ vars.AZURE_RESOURCE_GROUP }}-$SLUG" >> "$GITHUB_OUTPUT"
+                  fi
+
+    # Provision branch foundation.
+    foundation:
+        needs: resolve
+        if: needs.resolve.outputs.is_main == 'false'
+        runs-on: ubuntu-latest
+        environment: preview
+        outputs:
+            container_registry_name: ${{ steps.outputs.outputs.container_registry_name }}
+            container_registry_login_server: ${{ steps.outputs.outputs.container_registry_login_server }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Log in to Azure
+              uses: azure/login@v2
+              with:
+                  client-id: ${{ secrets.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+                  subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+            - name: Deploy isolated foundation via Bicep
+              run: |
+                  az deployment sub create -l "${{ needs.resolve.outputs.location }}" -n "branch-${{ needs.resolve.outputs.slug }}" -f infra/azure/subscription.bicep \
+                    -p resourceGroupName="${{ needs.resolve.outputs.resource_group }}" \
+                       location="${{ needs.resolve.outputs.location }}" \
+                       dbAdminPassword="${{ secrets.DB_ADMIN_PASSWORD }}" \
+                       garageAccessKey="${{ secrets.GARAGE_ACCESS_KEY }}" \
+                       garageSecretKey="${{ secrets.GARAGE_SECRET_KEY }}" \
+                       garageRpcSecret="${{ secrets.GARAGE_RPC_SECRET }}" \
+                       garageAdminToken="${{ secrets.GARAGE_ADMIN_TOKEN }}"
+
+            - name: Read foundation outputs
+              id: outputs
+              run: |
+                  DEPLOYMENT="branch-${{ needs.resolve.outputs.slug }}"
+                  echo "container_registry_name=$(az deployment sub show -n "$DEPLOYMENT" --query properties.outputs.containerRegistryName.value -o tsv)" >> "$GITHUB_OUTPUT"
+                  echo "container_registry_login_server=$(az deployment sub show -n "$DEPLOYMENT" --query properties.outputs.containerRegistryLoginServer.value -o tsv)" >> "$GITHUB_OUTPUT"
+
+    build_api:
+        needs: [resolve, foundation]
+        if: always() && needs.resolve.result == 'success' && (needs.resolve.outputs.is_main == 'true' || needs.foundation.result == 'success')
+        uses: ./.github/workflows/build-api.yml
+        with:
+            environment: ${{ needs.resolve.outputs.is_main == 'true' && 'production' || 'preview' }}
+            container_registry_name: ${{ needs.resolve.outputs.is_main == 'true' && vars.ACR_NAME || needs.foundation.outputs.container_registry_name }}
+            container_registry_login_server: ${{ needs.resolve.outputs.is_main == 'true' && vars.ACR_LOGIN_SERVER || needs.foundation.outputs.container_registry_login_server }}
+            image_tag: ${{ github.sha }}
+        secrets: inherit
+
+    deploy:
+        needs: [resolve, foundation, build_api]
+        if: always() && needs.resolve.result == 'success' && needs.build_api.result == 'success'
+        uses: ./.github/workflows/deploy-app.yml
+        with:
+            environment: ${{ needs.resolve.outputs.is_main == 'true' && 'production' || 'preview' }}
+            resource_group: ${{ needs.resolve.outputs.resource_group }}
+            deployment_name: ${{ needs.resolve.outputs.is_main == 'true' && 'production' || format('branch-{0}', needs.resolve.outputs.slug) }}
+            container_registry_name: ${{ needs.resolve.outputs.is_main == 'true' && vars.ACR_NAME || needs.foundation.outputs.container_registry_name }}
+            container_registry_login_server: ${{ needs.resolve.outputs.is_main == 'true' && vars.ACR_LOGIN_SERVER || needs.foundation.outputs.container_registry_login_server }}
+            container_app_name: app-api
+            web_app_name: app-web
+            image_tag: ${{ github.sha }}
+        secrets: inherit
+
+    summary:
+        needs: [resolve, deploy]
+        runs-on: ubuntu-latest
+        steps:
+            - name: Print deployed URL
+              run: |
+                  echo "### Deployed \`${{ github.ref_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+                  echo "- Resource group: \`${{ needs.resolve.outputs.resource_group }}\`" >> "$GITHUB_STEP_SUMMARY"
+                  echo "- URL: ${{ needs.deploy.outputs.web_url }}" >> "$GITHUB_STEP_SUMMARY"
