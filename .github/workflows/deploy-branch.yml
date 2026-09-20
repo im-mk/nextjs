@@ -10,6 +10,10 @@ permissions:
     id-token: write # Azure OIDC
     contents: read
 
+env:
+    AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'uksouth' }}
+    AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'nextjs' }}
+
 jobs:
     resolve:
         runs-on: ubuntu-latest
@@ -23,12 +27,13 @@ jobs:
               id: names
               run: |
                   BRANCH="${{ github.ref_name }}"
-                  LOCATION="${{ vars.AZURE_LOCATION || 'uksouth' }}"
+                                    LOCATION="$AZURE_LOCATION"
+                                    BASE_RESOURCE_GROUP="$AZURE_RESOURCE_GROUP"
                   echo "location=$LOCATION" >> "$GITHUB_OUTPUT"
 
                   if [[ "$BRANCH" == "main" ]]; then
                     echo "is_main=true" >> "$GITHUB_OUTPUT"
-                    echo "resource_group=${{ vars.AZURE_RESOURCE_GROUP }}" >> "$GITHUB_OUTPUT"
+                                        echo "resource_group=$BASE_RESOURCE_GROUP" >> "$GITHUB_OUTPUT"
                   else
                                         # Add a hash to avoid branch name collisions.
                                         PREFIX=$(echo "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9]+#-#g' | sed -E 's#^-+|-+$##g' | cut -c1-20)
@@ -39,7 +44,7 @@ jobs:
                                         SLUG="$PREFIX-$HASH"
                     echo "is_main=false" >> "$GITHUB_OUTPUT"
                     echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
-                    echo "resource_group=${{ vars.AZURE_RESOURCE_GROUP }}-$SLUG" >> "$GITHUB_OUTPUT"
+                                        echo "resource_group=$BASE_RESOURCE_GROUP-$SLUG" >> "$GITHUB_OUTPUT"
                   fi
 
     # Provision branch foundation.
@@ -47,7 +52,7 @@ jobs:
         needs: resolve
         if: needs.resolve.outputs.is_main == 'false'
         runs-on: ubuntu-latest
-        environment: preview
+        environment: production
         outputs:
             container_registry_name: ${{ steps.outputs.outputs.container_registry_name }}
             container_registry_login_server: ${{ steps.outputs.outputs.container_registry_login_server }}
@@ -64,10 +69,25 @@ jobs:
 
             - name: Deploy isolated foundation via Bicep
               run: |
+                  RESOURCE_GROUP="${{ needs.resolve.outputs.resource_group }}"
+                  KEY_VAULT_NAME=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.keyVaultName.value -o tsv 2>/dev/null || true)
+
+                  if [[ -n "$KEY_VAULT_NAME" ]]; then
+                      DB_ADMIN_PASSWORD=$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name database-admin-password --query value -o tsv 2>/dev/null || true)
+                  else
+                      DB_ADMIN_PASSWORD=''
+                  fi
+
+                  if [[ -z "$DB_ADMIN_PASSWORD" ]]; then
+                      DB_ADMIN_PASSWORD=$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32)
+                  fi
+
+                  echo "::add-mask::$DB_ADMIN_PASSWORD"
+
                   az deployment sub create -l "${{ needs.resolve.outputs.location }}" -n "branch-${{ needs.resolve.outputs.slug }}" -f infra/azure/subscription.bicep \
-                    -p resourceGroupName="${{ needs.resolve.outputs.resource_group }}" \
-                       location="${{ needs.resolve.outputs.location }}" \
-                                             dbAdminPassword="${{ secrets.DB_ADMIN_PASSWORD }}"
+                      -p resourceGroupName="$RESOURCE_GROUP" \
+                           location="${{ needs.resolve.outputs.location }}" \
+                           dbAdminPassword="$DB_ADMIN_PASSWORD"
 
             - name: Read foundation outputs
               id: outputs
@@ -81,7 +101,7 @@ jobs:
         if: always() && needs.resolve.result == 'success' && (needs.resolve.outputs.is_main == 'true' || needs.foundation.result == 'success')
         uses: ./.github/workflows/build-api.yml
         with:
-            environment: ${{ needs.resolve.outputs.is_main == 'true' && 'production' || 'preview' }}
+            environment: production
             container_registry_name: ${{ needs.resolve.outputs.is_main == 'true' && vars.ACR_NAME || needs.foundation.outputs.container_registry_name }}
             container_registry_login_server: ${{ needs.resolve.outputs.is_main == 'true' && vars.ACR_LOGIN_SERVER || needs.foundation.outputs.container_registry_login_server }}
             image_tag: ${{ github.sha }}
@@ -92,7 +112,7 @@ jobs:
         if: always() && needs.resolve.result == 'success' && needs.build_api.result == 'success'
         uses: ./.github/workflows/deploy-app.yml
         with:
-            environment: ${{ needs.resolve.outputs.is_main == 'true' && 'production' || 'preview' }}
+            environment: production
             resource_group: ${{ needs.resolve.outputs.resource_group }}
             deployment_name: ${{ needs.resolve.outputs.is_main == 'true' && 'production' || format('branch-{0}', needs.resolve.outputs.slug) }}
             container_registry_name: ${{ needs.resolve.outputs.is_main == 'true' && vars.ACR_NAME || needs.foundation.outputs.container_registry_name }}

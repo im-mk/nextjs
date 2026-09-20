@@ -14,10 +14,13 @@ permissions:
   id-token: write # Azure OIDC
   contents: read
 
+env:
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'nextjs' }}
+
 jobs:
   teardown:
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'production' || 'preview' }}
+    environment: production
     steps:
       - name: Verify confirmation
         run: |
@@ -37,7 +40,7 @@ jobs:
         run: |
           BRANCH="${{ github.ref_name }}"
           if [[ "$BRANCH" == "main" ]]; then
-            RESOURCE_GROUP="${{ vars.AZURE_RESOURCE_GROUP }}"
+            RESOURCE_GROUP="$AZURE_RESOURCE_GROUP"
             az containerapp delete -g "$RESOURCE_GROUP" -n app-web --yes || true
             az containerapp delete -g "$RESOURCE_GROUP" -n app-api --yes || true
           else
@@ -47,6 +50,6 @@ jobs:
             fi
             HASH=$(printf '%s' "$BRANCH" | sha256sum | cut -c1-8)
             SLUG="$PREFIX-$HASH"
-            RESOURCE_GROUP="${{ vars.AZURE_RESOURCE_GROUP }}-$SLUG"
+            RESOURCE_GROUP="$AZURE_RESOURCE_GROUP-$SLUG"
             az group delete -n "$RESOURCE_GROUP" --yes
           fi

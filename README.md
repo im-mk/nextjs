@@ -57,68 +57,97 @@ Note: services started with `docker compose up -d` do **not** hot-reload — reb
 
 The GitHub Actions deployment flow uses Azure OIDC via `azure/login@v2`. The shared foundation workflow is [setup-foundation.yml](.github/workflows/setup-foundation.yml).
 
-### 1. Create the Azure app registration for GitHub Actions
+### 1. Log in to Azure CLI
 
-Create an Entra ID app registration or service principal that GitHub Actions can use. Record these values:
+Authenticate first:
+
+```bash
+az login
+```
+
+### 2. Get the Azure subscription ID
+
+Run this next and keep the result for the following steps:
+
+```bash
+az account show --query id --output tsv
+```
+
+### 3. Create the Azure app registration for GitHub Actions
+
+Create an Entra ID app registration and service principal that GitHub Actions can use. Replace the placeholders below with names that fit your own naming convention. The command also assigns `Contributor` on the current subscription and prints the values you need for GitHub:
+
+```bash
+az ad sp create-for-rbac \
+    --name "<app-registration-name>" \
+    --role Contributor \
+    --scopes "/subscriptions/$(az account show --query id -o tsv)" \
+    --query '{AZURE_CLIENT_ID:appId,AZURE_TENANT_ID:tenant,AZURE_SUBSCRIPTION_ID:subscription}'
+```
+
+Record these values from the output:
 
 - `AZURE_CLIENT_ID`
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
 
-You can retrieve the tenant and subscription IDs with:
+If you prefer to create the app registration separately, make sure the resulting service principal has enough access to deploy the subscription-level and resource-group-level infrastructure used by `infra/azure/subscription.bicep`. `Contributor` on the target subscription is the simplest option for initial setup.
+
+### 4. Add the federated credential for this repo
+
+In the Azure app registration, add a federated credential that matches this repository and the GitHub environment used by the workflows:
 
 ```bash
-az account show --query id -o tsv
-az account show --query tenantId -o tsv
+az ad app federated-credential create \
+        --id "<AZURE_CLIENT_ID>" \
+        --parameters '{
+            "name": "<app-registration-name>",
+            "issuer": "https://token.actions.githubusercontent.com/",
+            "subject": "repo:<owner>/<repo>:environment:production",
+            "description": "GitHub Actions deployments",
+            "audiences": [
+                "api://AzureADTokenExchange"
+            ]
+        }'
 ```
-
-For the app registration client ID:
-
-```bash
-az ad app list --display-name "<app-registration-name>" --query "[0].appId" -o tsv
-```
-
-Grant the service principal enough access to deploy the subscription-level and resource-group-level infrastructure used by `infra/azure/subscription.bicep`. `Contributor` on the target subscription is the simplest option for initial setup.
-
-### 2. Add the federated credential for this repo
-
-In the Azure app registration, add a federated credential that matches this repository and the GitHub environment used by the workflow:
 
 - issuer: `https://token.actions.githubusercontent.com`
 - subject: `repo:<owner>/<repo>:environment:production`
 - audience: `api://AzureADTokenExchange`
 
-This must match the workflow environment in [setup-foundation.yml](.github/workflows/setup-foundation.yml).
+This must match the workflow environment in [setup-foundation.yml](.github/workflows/setup-foundation.yml). Branch deploy and teardown workflows also use the same `production` GitHub environment, so you do not need a separate `preview` environment.
 
-### 3. Configure GitHub environment secrets and variables
+### 5. Configure GitHub environment secrets and variables
 
 In GitHub, open `Settings -> Environments -> production` and set these values.
 
 Local development uses Azurite via Docker Compose. The Azure foundation deployment path now provisions Azure Blob Storage for documents.
+
+The same `production` environment is used for `Setup Foundation`, branch deploys, and branch teardown. A separate `preview` GitHub environment is not required.
 
 Secrets:
 
 - `AZURE_CLIENT_ID`
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
-- `DB_ADMIN_PASSWORD`
 
 Variables:
 
-- `AZURE_RESOURCE_GROUP`
+- `AZURE_RESOURCE_GROUP` (defaults to `nextjs`)
 - `AZURE_LOCATION` (optional, defaults to `uksouth`)
 
 The workflow now validates these before attempting Azure login, so missing configuration fails with a direct error instead of the generic `SERVICE_PRINCIPAL` message.
 
-### 4. Run the foundation workflow
+The database admin password is generated automatically on first foundation deployment, stored in Key Vault as `database-admin-password`, and reused on later runs.
+
+### 6. Run the foundation workflow
 
 In GitHub Actions, run `Setup Foundation`. It deploys the shared Azure foundation defined in `infra/azure/subscription.bicep`, including the resource group, container registry, container apps environment, database, key vault, and Azure Blob Storage for documents.
 
 If you prefer to deploy the same foundation locally with Azure CLI instead of GitHub Actions:
 
 ```bash
-make infra-up \
-    DB_ADMIN_PASSWORD='<db-password>'
+make infra-up
 ```
 
 Before running that locally, authenticate with Azure CLI and select the correct subscription:
@@ -128,7 +157,7 @@ az login
 az account set --subscription "<subscription-id-or-name>"
 ```
 
-### 5. Build and deploy the app
+### 7. Build and deploy the app
 
 After the foundation exists, deploy in this order:
 
@@ -142,7 +171,7 @@ The same pieces are also available via GitHub workflows:
 - [deploy-app.yml](.github/workflows/deploy-app.yml)
 - [deploy-branch.yml](.github/workflows/deploy-branch.yml)
 
-### 6. Tear down
+### 8. Tear down
 
 To delete the shared resource group locally:
 

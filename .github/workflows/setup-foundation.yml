@@ -9,6 +9,10 @@ permissions:
   id-token: write # Azure OIDC
   contents: read
 
+env:
+  AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'uksouth' }}
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'nextjs' }}
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -22,8 +26,6 @@ jobs:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          DB_ADMIN_PASSWORD: ${{ secrets.DB_ADMIN_PASSWORD }}
         run: |
           missing=0
 
@@ -34,18 +36,9 @@ jobs:
             fi
           }
 
-          require_variable() {
-            if [ -z "$2" ]; then
-              echo "Missing GitHub variable: $1"
-              missing=1
-            fi
-          }
-
           require_secret "AZURE_CLIENT_ID" "$AZURE_CLIENT_ID"
           require_secret "AZURE_TENANT_ID" "$AZURE_TENANT_ID"
           require_secret "AZURE_SUBSCRIPTION_ID" "$AZURE_SUBSCRIPTION_ID"
-          require_variable "AZURE_RESOURCE_GROUP" "$AZURE_RESOURCE_GROUP"
-          require_secret "DB_ADMIN_PASSWORD" "$DB_ADMIN_PASSWORD"
 
           if [ "$missing" -ne 0 ]; then
             echo "Configure the missing values in GitHub -> Settings -> Environments -> production."
@@ -61,7 +54,22 @@ jobs:
 
       - name: Deploy foundation via Bicep
         run: |
-          az deployment sub create -l "${{ vars.AZURE_LOCATION || 'uksouth' }}" -f infra/azure/subscription.bicep \
-            -p resourceGroupName="${{ vars.AZURE_RESOURCE_GROUP }}" \
-               location="${{ vars.AZURE_LOCATION || 'uksouth' }}" \
-               dbAdminPassword="${{ secrets.DB_ADMIN_PASSWORD }}"
+          RESOURCE_GROUP="$AZURE_RESOURCE_GROUP"
+          KEY_VAULT_NAME=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.keyVaultName.value -o tsv 2>/dev/null || true)
+
+          if [ -n "$KEY_VAULT_NAME" ]; then
+            DB_ADMIN_PASSWORD=$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name database-admin-password --query value -o tsv 2>/dev/null || true)
+          else
+            DB_ADMIN_PASSWORD=''
+          fi
+
+          if [ -z "$DB_ADMIN_PASSWORD" ]; then
+            DB_ADMIN_PASSWORD=$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32)
+          fi
+
+          echo "::add-mask::$DB_ADMIN_PASSWORD"
+
+          az deployment sub create -l "$AZURE_LOCATION" -f infra/azure/subscription.bicep \
+            -p resourceGroupName="$RESOURCE_GROUP" \
+            location="$AZURE_LOCATION" \
+               dbAdminPassword="$DB_ADMIN_PASSWORD"

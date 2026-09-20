@@ -165,6 +165,14 @@ resource databaseConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-
   }
 }
 
+resource databaseAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'database-admin-password'
+  properties: {
+    value: dbAdminPassword
+  }
+}
+
 resource objectStorageAccountKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
   name: 'object-storage-account-key'

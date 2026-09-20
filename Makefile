@@ -27,9 +27,16 @@ ACR_NAME := $(shell az deployment group show -g $(RESOURCE_GROUP) -n foundation 
 
 # create the resource group + registry + container apps environment + postgres db + blob storage foundation (idempotent)
 infra-up:
-	@test -n "$(DB_ADMIN_PASSWORD)" || (echo "DB_ADMIN_PASSWORD is required, e.g. make infra-up DB_ADMIN_PASSWORD=..." && exit 1)
+	@KEY_VAULT_NAME=$$(az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.keyVaultName.value -o tsv 2>/dev/null || true); \
+	DB_ADMIN_PASSWORD=''; \
+	if [ -n "$$KEY_VAULT_NAME" ]; then \
+		DB_ADMIN_PASSWORD=$$(az keyvault secret show --vault-name $$KEY_VAULT_NAME --name database-admin-password --query value -o tsv 2>/dev/null || true); \
+	fi; \
+	if [ -z "$$DB_ADMIN_PASSWORD" ]; then \
+		DB_ADMIN_PASSWORD=$$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32); \
+	fi; \
 	az deployment sub create -l $(LOCATION) -f infra/azure/subscription.bicep -p resourceGroupName=$(RESOURCE_GROUP) location=$(LOCATION) \
-		dbAdminPassword="$(DB_ADMIN_PASSWORD)"
+		dbAdminPassword="$$DB_ADMIN_PASSWORD"
 
 # build the api image in ACR and push it
 infra-build-push:

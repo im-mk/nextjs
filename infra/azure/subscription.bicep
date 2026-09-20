@@ -12,7 +12,13 @@ param location string = 'uksouth'
 param containerRegistryName string = 'appapi${uniqueString('/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}')}'
 
 @description('Name of the Azure Container Apps environment.')
-param containerAppsEnvironmentName string = 'app-api-env'
+param containerAppsEnvironmentName string = 'app-api-env-${uniqueString('/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}')}'
+
+@description('Name of the PostgreSQL flexible server.')
+param dbServerName string = 'appdb-${uniqueString('/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}')}'
+
+@description('Name of the Key Vault used to store secrets consumed by the app.')
+param keyVaultName string = 'appkv${uniqueString('/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}')}'
 
 @description('Administrator username for the PostgreSQL flexible server.')
 param dbAdminUsername string = 'appadmin'
@@ -41,9 +47,11 @@ module foundation 'foundation.bicep' = {
     location: location
     containerRegistryName: containerRegistryName
     containerAppsEnvironmentName: containerAppsEnvironmentName
+    dbServerName: dbServerName
     dbAdminUsername: dbAdminUsername
     dbAdminPassword: dbAdminPassword
     databaseName: databaseName
+    keyVaultName: keyVaultName
     objectStorageContainerName: objectStorageContainerName
   }
 }
