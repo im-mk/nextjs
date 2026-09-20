@@ -94,7 +94,7 @@ This must match the workflow environment in [setup-foundation.yml](.github/workf
 
 In GitHub, open `Settings -> Environments -> production` and set these values.
 
-Local development now uses Azurite via Docker Compose. The secrets below are only for the existing Azure foundation deployment path, which has not been migrated yet and still provisions Garage-backed object storage.
+Local development uses Azurite via Docker Compose. The Azure foundation deployment path now provisions Azure Blob Storage for documents.
 
 Secrets:
 
@@ -102,10 +102,6 @@ Secrets:
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
 - `DB_ADMIN_PASSWORD`
-- `GARAGE_ACCESS_KEY`
-- `GARAGE_SECRET_KEY`
-- `GARAGE_RPC_SECRET`
-- `GARAGE_ADMIN_TOKEN`
 
 Variables:
 
@@ -116,17 +112,13 @@ The workflow now validates these before attempting Azure login, so missing confi
 
 ### 4. Run the foundation workflow
 
-In GitHub Actions, run `Setup Foundation`. It deploys the shared Azure foundation defined in `infra/azure/subscription.bicep`, including the resource group, container registry, container apps environment, database, key vault, and the current Garage-backed object storage layer.
+In GitHub Actions, run `Setup Foundation`. It deploys the shared Azure foundation defined in `infra/azure/subscription.bicep`, including the resource group, container registry, container apps environment, database, key vault, and Azure Blob Storage for documents.
 
 If you prefer to deploy the same foundation locally with Azure CLI instead of GitHub Actions:
 
 ```bash
 make infra-up \
-    DB_ADMIN_PASSWORD='<db-password>' \
-    GARAGE_ACCESS_KEY='<garage-access-key>' \
-    GARAGE_SECRET_KEY='<garage-secret-key>' \
-    GARAGE_RPC_SECRET='<openssl rand -hex 32>' \
-    GARAGE_ADMIN_TOKEN='<openssl rand -base64 32>'
+    DB_ADMIN_PASSWORD='<db-password>'
 ```
 
 Before running that locally, authenticate with Azure CLI and select the correct subscription:

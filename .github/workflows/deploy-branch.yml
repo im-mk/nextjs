@@ -67,11 +67,7 @@ jobs:
                   az deployment sub create -l "${{ needs.resolve.outputs.location }}" -n "branch-${{ needs.resolve.outputs.slug }}" -f infra/azure/subscription.bicep \
                     -p resourceGroupName="${{ needs.resolve.outputs.resource_group }}" \
                        location="${{ needs.resolve.outputs.location }}" \
-                       dbAdminPassword="${{ secrets.DB_ADMIN_PASSWORD }}" \
-                       garageAccessKey="${{ secrets.GARAGE_ACCESS_KEY }}" \
-                       garageSecretKey="${{ secrets.GARAGE_SECRET_KEY }}" \
-                       garageRpcSecret="${{ secrets.GARAGE_RPC_SECRET }}" \
-                       garageAdminToken="${{ secrets.GARAGE_ADMIN_TOKEN }}"
+                                             dbAdminPassword="${{ secrets.DB_ADMIN_PASSWORD }}"
 
             - name: Read foundation outputs
               id: outputs

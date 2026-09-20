@@ -58,6 +58,8 @@ When `ObjectStorage:Provider` is `Azure`, the development API configures Azurite
 
 When `ObjectStorage:Provider` is `Aws`, the development API creates the configured bucket if needed and applies matching S3 bucket CORS rules for the same local web origins. This supports direct browser uploads to a local S3-compatible endpoint such as LocalStack.
 
+Azure deployments use the Blob storage settings emitted by [infra/azure/foundation.bicep](infra/azure/foundation.bicep), so no S3-compatible storage service is provisioned in Azure anymore.
+
 Azurite local setup for this API:
 
 - Docker Compose runs Azurite as the `azurite` service.

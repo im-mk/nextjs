@@ -25,19 +25,11 @@ LOCATION ?= uksouth
 IMAGE_TAG ?= latest
 ACR_NAME := $(shell az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.containerRegistryName.value -o tsv)
 
-# create the resource group + registry + container apps environment + postgres db + the current foundation object storage (idempotent)
+# create the resource group + registry + container apps environment + postgres db + blob storage foundation (idempotent)
 infra-up:
-	@test -n "$(DB_ADMIN_PASSWORD)" || (echo "DB_ADMIN_PASSWORD is required, e.g. make infra-up DB_ADMIN_PASSWORD=... GARAGE_ACCESS_KEY=... GARAGE_SECRET_KEY=... GARAGE_RPC_SECRET=... GARAGE_ADMIN_TOKEN=..." && exit 1)
-	@test -n "$(GARAGE_ACCESS_KEY)" || (echo "GARAGE_ACCESS_KEY is required" && exit 1)
-	@test -n "$(GARAGE_SECRET_KEY)" || (echo "GARAGE_SECRET_KEY is required" && exit 1)
-	@test -n "$(GARAGE_RPC_SECRET)" || (echo "GARAGE_RPC_SECRET is required, e.g. openssl rand -hex 32" && exit 1)
-	@test -n "$(GARAGE_ADMIN_TOKEN)" || (echo "GARAGE_ADMIN_TOKEN is required, e.g. openssl rand -base64 32" && exit 1)
+	@test -n "$(DB_ADMIN_PASSWORD)" || (echo "DB_ADMIN_PASSWORD is required, e.g. make infra-up DB_ADMIN_PASSWORD=..." && exit 1)
 	az deployment sub create -l $(LOCATION) -f infra/azure/subscription.bicep -p resourceGroupName=$(RESOURCE_GROUP) location=$(LOCATION) \
-		dbAdminPassword="$(DB_ADMIN_PASSWORD)" \
-		garageAccessKey="$(GARAGE_ACCESS_KEY)" \
-		garageSecretKey="$(GARAGE_SECRET_KEY)" \
-		garageRpcSecret="$(GARAGE_RPC_SECRET)" \
-		garageAdminToken="$(GARAGE_ADMIN_TOKEN)"
+		dbAdminPassword="$(DB_ADMIN_PASSWORD)"
 
 # build the api image in ACR and push it
 infra-build-push:
@@ -49,7 +41,7 @@ infra-build-push-web:
 	az acr build -r $(ACR_NAME) -t $(ACR_NAME).azurecr.io/app-web:$(IMAGE_TAG) -f web/Dockerfile --build-arg NEXT_PUBLIC_API_BASE_URL=$(API_BASE_URL) web
 
 # deploy/update the container app with the freshly pushed image
-# all secrets (db password, current foundation storage keys) are read from Key Vault via the app's managed identity - nothing plaintext passed here
+# all secrets (db password, blob storage account key) are read from Key Vault via the app's managed identity - nothing plaintext passed here
 infra-deploy-app:
 	az deployment group create -g $(RESOURCE_GROUP) -f infra/azure/main.bicep \
 		-p containerRegistryName=$(ACR_NAME) \
@@ -57,11 +49,11 @@ infra-deploy-app:
 		   image=$(ACR_NAME).azurecr.io/app-api:$(IMAGE_TAG) \
 		   webImage=$(ACR_NAME).azurecr.io/app-web:$(IMAGE_TAG) \
 		   databaseConnectionStringSecretUri=$$(az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.databaseConnectionStringSecretUri.value -o tsv) \
-		   objectStorageServiceUrl=$$(az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.garageServiceUrl.value -o tsv) \
-		   objectStoragePublicServiceUrl=$$(az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.garagePublicServiceUrl.value -o tsv) \
-		   objectStorageAccessKeySecretUri=$$(az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.garageAccessKeySecretUri.value -o tsv) \
-		   objectStorageSecretKeySecretUri=$$(az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.garageSecretKeySecretUri.value -o tsv) \
-		   objectStorageBucket=$$(az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.garageBucket.value -o tsv)
+		   objectStorageServiceUri=$$(az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.objectStorageServiceUri.value -o tsv) \
+		   objectStoragePublicServiceUri=$$(az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.objectStoragePublicServiceUri.value -o tsv) \
+		   objectStorageAccountName=$$(az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.objectStorageAccountName.value -o tsv) \
+		   objectStorageAccountKeySecretUri=$$(az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.objectStorageAccountKeySecretUri.value -o tsv) \
+		   objectStorageContainerName=$$(az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.objectStorageContainerName.value -o tsv)
 
 # delete the whole resource group (destructive, prompts for confirmation)
 infra-down:

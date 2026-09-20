@@ -24,22 +24,21 @@ param webImage string = ''
 @description('Key Vault secret URI (from foundation.bicep output) holding the Npgsql connection string.')
 param databaseConnectionStringSecretUri string
 
-@description('S3-compatible service endpoint used by the API.')
-param objectStorageServiceUrl string = ''
+@description('Azure Blob service endpoint used by the API.')
+param objectStorageServiceUri string = ''
 
-@description('Public S3-compatible service endpoint used when generating browser-facing URLs.')
-param objectStoragePublicServiceUrl string = ''
+@description('Public Azure Blob service endpoint used when generating browser-facing URLs.')
+param objectStoragePublicServiceUri string = ''
+
+@description('Azure Storage account name used by the API.')
+param objectStorageAccountName string
 
 @secure()
-@description('Key Vault secret URI (from foundation.bicep output) holding the Garage access key.')
-param objectStorageAccessKeySecretUri string
+@description('Key Vault secret URI (from foundation.bicep output) holding the Azure Storage account key.')
+param objectStorageAccountKeySecretUri string
 
-@secure()
-@description('Key Vault secret URI (from foundation.bicep output) holding the Garage secret key.')
-param objectStorageSecretKeySecretUri string
-
-@description('Bucket name for documents.')
-param objectStorageBucket string = ''
+@description('Blob container name for documents.')
+param objectStorageContainerName string = ''
 
 // ---------- existing resources created by foundation.bicep ----------
 var containerRegistryLoginServer = '${containerRegistryName}.azurecr.io'
@@ -84,13 +83,8 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           identity: containerAppIdentityResourceId
         }
         {
-          name: 'object-storage-access-key'
-          keyVaultUrl: objectStorageAccessKeySecretUri
-          identity: containerAppIdentityResourceId
-        }
-        {
-          name: 'object-storage-secret-key'
-          keyVaultUrl: objectStorageSecretKeySecretUri
+          name: 'object-storage-account-key'
+          keyVaultUrl: objectStorageAccountKeySecretUri
           identity: containerAppIdentityResourceId
         }
       ]
@@ -110,24 +104,28 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               secretRef: 'database-connection-string'
             }
             {
-              name: 'ObjectStorage__ServiceUrl'
-              value: objectStorageServiceUrl
+              name: 'ObjectStorage__Provider'
+              value: 'Azure'
             }
             {
-              name: 'ObjectStorage__PublicServiceUrl'
-              value: objectStoragePublicServiceUrl
+              name: 'ObjectStorage__Azure__ServiceUri'
+              value: objectStorageServiceUri
             }
             {
-              name: 'ObjectStorage__AccessKey'
-              secretRef: 'object-storage-access-key'
+              name: 'ObjectStorage__Azure__PublicServiceUri'
+              value: objectStoragePublicServiceUri
             }
             {
-              name: 'ObjectStorage__SecretKey'
-              secretRef: 'object-storage-secret-key'
+              name: 'ObjectStorage__Azure__AccountName'
+              value: objectStorageAccountName
             }
             {
-              name: 'ObjectStorage__Bucket'
-              value: objectStorageBucket
+              name: 'ObjectStorage__Azure__AccountKey'
+              secretRef: 'object-storage-account-key'
+            }
+            {
+              name: 'ObjectStorage__Azure__Container'
+              value: objectStorageContainerName
             }
             {
               name: 'Cors__WebOrigin'

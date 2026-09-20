@@ -8,7 +8,7 @@ on:
                 required: true
                 type: string
             resource_group:
-                description: "Resource group containing the foundation (registry, environment, db, key vault, garage) to deploy into"
+                description: "Resource group containing the foundation (registry, environment, db, key vault, storage) to deploy into"
                 required: true
                 type: string
             deployment_name:
@@ -68,11 +68,11 @@ jobs:
 
                   CONTAINER_APP_IDENTITY_ID=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.containerAppIdentityResourceId.value -o tsv)
                   DATABASE_CONNECTION_STRING_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.databaseConnectionStringSecretUri.value -o tsv)
-                  OBJECT_STORAGE_SERVICE_URL=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageServiceUrl.value -o tsv)
-                  OBJECT_STORAGE_PUBLIC_SERVICE_URL=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garagePublicServiceUrl.value -o tsv)
-                  OBJECT_STORAGE_ACCESS_KEY_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageAccessKeySecretUri.value -o tsv)
-                  OBJECT_STORAGE_SECRET_KEY_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageSecretKeySecretUri.value -o tsv)
-                  OBJECT_STORAGE_BUCKET=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageBucket.value -o tsv)
+                   OBJECT_STORAGE_SERVICE_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.objectStorageServiceUri.value -o tsv)
+                   OBJECT_STORAGE_PUBLIC_SERVICE_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.objectStoragePublicServiceUri.value -o tsv)
+                   OBJECT_STORAGE_ACCOUNT_NAME=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.objectStorageAccountName.value -o tsv)
+                   OBJECT_STORAGE_ACCOUNT_KEY_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.objectStorageAccountKeySecretUri.value -o tsv)
+                   OBJECT_STORAGE_CONTAINER_NAME=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.objectStorageContainerName.value -o tsv)
 
                   az deployment group create -g "$RESOURCE_GROUP" -n "${{ inputs.deployment_name }}" -f infra/azure/main.bicep \
                     -p containerRegistryName="${{ inputs.container_registry_name }}" \
@@ -81,11 +81,11 @@ jobs:
                        webAppName="${{ inputs.web_app_name }}" \
                        image="${{ inputs.container_registry_login_server }}/app-api:${{ inputs.image_tag }}" \
                        databaseConnectionStringSecretUri="$DATABASE_CONNECTION_STRING_SECRET_URI" \
-                       objectStorageServiceUrl="$OBJECT_STORAGE_SERVICE_URL" \
-                       objectStoragePublicServiceUrl="$OBJECT_STORAGE_PUBLIC_SERVICE_URL" \
-                       objectStorageAccessKeySecretUri="$OBJECT_STORAGE_ACCESS_KEY_SECRET_URI" \
-                       objectStorageSecretKeySecretUri="$OBJECT_STORAGE_SECRET_KEY_SECRET_URI" \
-                       objectStorageBucket="$OBJECT_STORAGE_BUCKET"
+                       objectStorageServiceUri="$OBJECT_STORAGE_SERVICE_URI" \
+                       objectStoragePublicServiceUri="$OBJECT_STORAGE_PUBLIC_SERVICE_URI" \
+                       objectStorageAccountName="$OBJECT_STORAGE_ACCOUNT_NAME" \
+                       objectStorageAccountKeySecretUri="$OBJECT_STORAGE_ACCOUNT_KEY_SECRET_URI" \
+                       objectStorageContainerName="$OBJECT_STORAGE_CONTAINER_NAME"
 
             - name: Build and push web image
               run: |
@@ -102,11 +102,11 @@ jobs:
                   RESOURCE_GROUP="${{ inputs.resource_group }}"
                   CONTAINER_APP_IDENTITY_ID=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.containerAppIdentityResourceId.value -o tsv)
                   DATABASE_CONNECTION_STRING_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.databaseConnectionStringSecretUri.value -o tsv)
-                  OBJECT_STORAGE_SERVICE_URL=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageServiceUrl.value -o tsv)
-                  OBJECT_STORAGE_PUBLIC_SERVICE_URL=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garagePublicServiceUrl.value -o tsv)
-                  OBJECT_STORAGE_ACCESS_KEY_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageAccessKeySecretUri.value -o tsv)
-                  OBJECT_STORAGE_SECRET_KEY_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageSecretKeySecretUri.value -o tsv)
-                  OBJECT_STORAGE_BUCKET=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.garageBucket.value -o tsv)
+                                    OBJECT_STORAGE_SERVICE_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.objectStorageServiceUri.value -o tsv)
+                                    OBJECT_STORAGE_PUBLIC_SERVICE_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.objectStoragePublicServiceUri.value -o tsv)
+                                    OBJECT_STORAGE_ACCOUNT_NAME=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.objectStorageAccountName.value -o tsv)
+                                    OBJECT_STORAGE_ACCOUNT_KEY_SECRET_URI=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.objectStorageAccountKeySecretUri.value -o tsv)
+                                    OBJECT_STORAGE_CONTAINER_NAME=$(az deployment group show -g "$RESOURCE_GROUP" -n foundation --query properties.outputs.objectStorageContainerName.value -o tsv)
 
                   az deployment group create -g "$RESOURCE_GROUP" -n "${{ inputs.deployment_name }}" -f infra/azure/main.bicep \
                     -p containerRegistryName="${{ inputs.container_registry_name }}" \
@@ -116,11 +116,11 @@ jobs:
                        image="${{ inputs.container_registry_login_server }}/app-api:${{ inputs.image_tag }}" \
                        webImage="${{ inputs.container_registry_login_server }}/app-web:${{ inputs.image_tag }}" \
                        databaseConnectionStringSecretUri="$DATABASE_CONNECTION_STRING_SECRET_URI" \
-                       objectStorageServiceUrl="$OBJECT_STORAGE_SERVICE_URL" \
-                       objectStoragePublicServiceUrl="$OBJECT_STORAGE_PUBLIC_SERVICE_URL" \
-                       objectStorageAccessKeySecretUri="$OBJECT_STORAGE_ACCESS_KEY_SECRET_URI" \
-                       objectStorageSecretKeySecretUri="$OBJECT_STORAGE_SECRET_KEY_SECRET_URI" \
-                       objectStorageBucket="$OBJECT_STORAGE_BUCKET"
+                       objectStorageServiceUri="$OBJECT_STORAGE_SERVICE_URI" \
+                       objectStoragePublicServiceUri="$OBJECT_STORAGE_PUBLIC_SERVICE_URI" \
+                       objectStorageAccountName="$OBJECT_STORAGE_ACCOUNT_NAME" \
+                       objectStorageAccountKeySecretUri="$OBJECT_STORAGE_ACCOUNT_KEY_SECRET_URI" \
+                       objectStorageContainerName="$OBJECT_STORAGE_CONTAINER_NAME"
 
             - name: Get web URL
               id: web-url

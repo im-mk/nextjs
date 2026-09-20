@@ -24,24 +24,8 @@ param dbAdminPassword string
 @description('Name of the application database to create.')
 param databaseName string = 'app'
 
-@secure()
-@description('Access key for the Garage default bucket.')
-param garageAccessKey string
-
-@secure()
-@description('Secret key for the Garage default bucket.')
-param garageSecretKey string
-
-@secure()
-@description('RPC secret for Garage inter-node communication.')
-param garageRpcSecret string
-
-@secure()
-@description('Admin API token for Garage.')
-param garageAdminToken string
-
-@description('Name of the default bucket Garage creates for documents.')
-param garageBucket string = 'documents'
+@description('Name of the blob container used for documents.')
+param objectStorageContainerName string = 'documents'
 
 // ---------- resource group (created here so the whole stack is a single subscription-level deployment) ----------
 resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
@@ -49,7 +33,7 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   location: location
 }
 
-// ---------- foundation module (registry, identity, environment, db, key vault, garage) ----------
+// ---------- foundation module (registry, identity, environment, db, key vault, storage) ----------
 module foundation 'foundation.bicep' = {
   name: 'foundation'
   scope: rg
@@ -60,11 +44,7 @@ module foundation 'foundation.bicep' = {
     dbAdminUsername: dbAdminUsername
     dbAdminPassword: dbAdminPassword
     databaseName: databaseName
-    garageAccessKey: garageAccessKey
-    garageSecretKey: garageSecretKey
-    garageRpcSecret: garageRpcSecret
-    garageAdminToken: garageAdminToken
-    garageBucket: garageBucket
+    objectStorageContainerName: objectStorageContainerName
   }
 }
 
@@ -79,8 +59,8 @@ output dbAdminUsername string = foundation.outputs.dbAdminUsername
 output databaseName string = foundation.outputs.databaseName
 output keyVaultName string = foundation.outputs.keyVaultName
 output databaseConnectionStringSecretUri string = foundation.outputs.databaseConnectionStringSecretUri
-output garageAccessKeySecretUri string = foundation.outputs.garageAccessKeySecretUri
-output garageSecretKeySecretUri string = foundation.outputs.garageSecretKeySecretUri
-output garageBucket string = foundation.outputs.garageBucket
-output garageServiceUrl string = foundation.outputs.garageServiceUrl
-output garagePublicServiceUrl string = foundation.outputs.garagePublicServiceUrl
+output objectStorageAccountName string = foundation.outputs.objectStorageAccountName
+output objectStorageAccountKeySecretUri string = foundation.outputs.objectStorageAccountKeySecretUri
+output objectStorageContainerName string = foundation.outputs.objectStorageContainerName
+output objectStorageServiceUri string = foundation.outputs.objectStorageServiceUri
+output objectStoragePublicServiceUri string = foundation.outputs.objectStoragePublicServiceUri
