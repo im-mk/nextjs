@@ -102,8 +102,8 @@ az ad app federated-credential create \
         --id "<AZURE_CLIENT_ID>" \
         --parameters '{
             "name": "<app-registration-name>",
-            "issuer": "https://token.actions.githubusercontent.com/",
-            "subject": "repo:<owner>/<repo>:environment:production",
+            "issuer": "https://token.actions.githubusercontent.com",
+            "subject": "repo:im-mk/nextjs:environment:production",
             "description": "GitHub Actions deployments",
             "audiences": [
                 "api://AzureADTokenExchange"
@@ -112,10 +112,40 @@ az ad app federated-credential create \
 ```
 
 - issuer: `https://token.actions.githubusercontent.com`
-- subject: `repo:<owner>/<repo>:environment:production`
+- subject: `repo:im-mk/nextjs:environment:production`
 - audience: `api://AzureADTokenExchange`
 
 This must match the workflow environment in [setup-foundation.yml](.github/workflows/setup-foundation.yml). Branch deploy and teardown workflows also use the same `production` GitHub environment, so you do not need a separate `preview` environment.
+
+The issuer, subject, and audience must match the GitHub OIDC token exactly. In particular, do not add a trailing `/` to the issuer. If you already created the credential with `https://token.actions.githubusercontent.com/`, delete and recreate it with the exact issuer above or Azure login will fail with `AADSTS700211`.
+
+To inspect existing federated credentials on the app:
+
+```bash
+az ad app federated-credential list \
+    --id "<AZURE_CLIENT_ID>" \
+    --query '[].{name:name,issuer:issuer,subject:subject,audiences:audiences}'
+```
+
+If needed, recreate the credential:
+
+```bash
+az ad app federated-credential delete \
+    --id "<AZURE_CLIENT_ID>" \
+    --federated-credential-id "<credential-name>"
+
+az ad app federated-credential create \
+    --id "<AZURE_CLIENT_ID>" \
+    --parameters '{
+        "name": "<credential-name>",
+        "issuer": "https://token.actions.githubusercontent.com",
+        "subject": "repo:im-mk/nextjs:environment:production",
+        "description": "GitHub Actions deployments",
+        "audiences": [
+            "api://AzureADTokenExchange"
+        ]
+    }'
+```
 
 ### 5. Configure GitHub environment secrets and variables
 
@@ -180,4 +210,3 @@ make infra-down RESOURCE_GROUP=<your-resource-group>
 ```
 
 Or run the `Teardown Foundation` GitHub Actions workflow.
-
