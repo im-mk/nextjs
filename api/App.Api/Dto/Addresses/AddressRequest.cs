@@ -1,7 +1,6 @@
-
 using System.ComponentModel.DataAnnotations;
 
-namespace App.Api.Models;
+namespace App.Api.Dto.Addresses;
 
 public class AddressRequest
 {
@@ -26,5 +25,3 @@ public class AddressRequest
     [StringLength(2)]
     public string Country { get; set; } = "GB";
 }
-
-

@@ -11,6 +11,7 @@ export type Document = {
 export type CreateUploadUrlResponse = {
   uploadUrl: string;
   storageKey: string;
+  uploadHeaders: Record<string, string>;
 };
 
 export type DownloadUrlResponse = {

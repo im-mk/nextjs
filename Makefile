@@ -1,4 +1,4 @@
-.PHONY: db api start stop garage infra-up infra-build-push infra-build-push-web infra-deploy-app infra-down
+.PHONY: db api start stop azurite infra-up infra-build-push infra-build-push-web infra-deploy-app infra-down
 
 # docker
 
@@ -9,8 +9,8 @@ api:
 	make db
 	docker compose up -d api --build
 
-garage:
-	docker compose up -d garage --build
+azurite:
+	docker compose up -d azurite
 
 start:
 	docker compose up -d --build
@@ -25,7 +25,7 @@ LOCATION ?= uksouth
 IMAGE_TAG ?= latest
 ACR_NAME := $(shell az deployment group show -g $(RESOURCE_GROUP) -n foundation --query properties.outputs.containerRegistryName.value -o tsv)
 
-# create the resource group + registry + container apps environment + postgres db + garage (idempotent)
+# create the resource group + registry + container apps environment + postgres db + the current foundation object storage (idempotent)
 infra-up:
 	@test -n "$(DB_ADMIN_PASSWORD)" || (echo "DB_ADMIN_PASSWORD is required, e.g. make infra-up DB_ADMIN_PASSWORD=... GARAGE_ACCESS_KEY=... GARAGE_SECRET_KEY=... GARAGE_RPC_SECRET=... GARAGE_ADMIN_TOKEN=..." && exit 1)
 	@test -n "$(GARAGE_ACCESS_KEY)" || (echo "GARAGE_ACCESS_KEY is required" && exit 1)
@@ -49,7 +49,7 @@ infra-build-push-web:
 	az acr build -r $(ACR_NAME) -t $(ACR_NAME).azurecr.io/app-web:$(IMAGE_TAG) -f web/Dockerfile --build-arg NEXT_PUBLIC_API_BASE_URL=$(API_BASE_URL) web
 
 # deploy/update the container app with the freshly pushed image
-# all secrets (db password, garage keys) are read from Key Vault via the app's managed identity - nothing plaintext passed here
+# all secrets (db password, current foundation storage keys) are read from Key Vault via the app's managed identity - nothing plaintext passed here
 infra-deploy-app:
 	az deployment group create -g $(RESOURCE_GROUP) -f infra/azure/main.bicep \
 		-p containerRegistryName=$(ACR_NAME) \

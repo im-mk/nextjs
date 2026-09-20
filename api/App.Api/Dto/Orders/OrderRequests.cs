@@ -1,4 +1,6 @@
-namespace App.Api.Models;
+using App.Api.Dto.Addresses;
+
+namespace App.Api.Dto.Orders;
 
 public class CreateOrderRequest
 {
@@ -7,7 +9,7 @@ public class CreateOrderRequest
     public decimal TotalAmount { get; set; }
     public AddressRequest ShippingAddress { get; set; } = default!;
     public AddressRequest BillingAddress { get; set; } = default!;
-    public List<OrderItem> OrderLines { get; set; } = new List<OrderItem>();
+    public List<OrderItem> OrderLines { get; set; } = [];
 }
 
 public class OrderItem

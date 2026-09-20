@@ -1,3 +1,5 @@
+namespace App.Api.Entities;
+
 public class Customer
 {
     public int Id { get; set; }

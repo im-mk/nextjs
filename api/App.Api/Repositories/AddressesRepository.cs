@@ -1,5 +1,6 @@
 using System.Data;
 using Dapper;
+using App.Api.Entities;
 
 namespace App.Api.Repositories;
 

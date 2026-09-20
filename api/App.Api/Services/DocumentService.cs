@@ -1,45 +1,16 @@
-using Amazon.Runtime;
-using Amazon.S3;
-using Amazon.S3.Model;
 using App.Api.Entities;
-using App.Api.Models;
-using App.Api.Options;
+using App.Api.Dto.Documents;
 using App.Api.Repositories;
-using Microsoft.Extensions.Options;
 
 namespace App.Api.Services;
 
 public class DocumentService(
     IDocumentsRepository documentsRepository,
-    IAmazonS3 s3Client,
-    IOptions<ObjectStorageOptions> objectStorageOptions) : IDocumentService
+    IObjectStorageService objectStorageService) : IDocumentService
 {
     private readonly IDocumentsRepository _documentsRepository = documentsRepository;
-    private readonly IAmazonS3 _s3Client = s3Client;
-    private readonly ObjectStorageOptions _objectStorageOptions = objectStorageOptions.Value;
+    private readonly IObjectStorageService _objectStorageService = objectStorageService;
     private static readonly TimeSpan PresignedUrlLifetime = TimeSpan.FromMinutes(15);
-
-    // Presigned URLs must be signed against the browser-reachable endpoint, not the internal docker service URL.
-    private IAmazonS3 CreatePresigningClient()
-    {
-        return new AmazonS3Client(
-            new BasicAWSCredentials(_objectStorageOptions.AccessKey, _objectStorageOptions.SecretKey),
-            new AmazonS3Config
-            {
-                ServiceURL = _objectStorageOptions.PublicServiceUrl,
-                AuthenticationRegion = _objectStorageOptions.Region,
-                ForcePathStyle = true
-            });
-    }
-
-    // The SDK always signs presigned URLs as https regardless of ServiceURL's scheme, so rewrite it back to match PublicServiceUrl.
-    private string EnforcePublicUrlScheme(string presignedUrl)
-    {
-        var publicUri = new Uri(_objectStorageOptions.PublicServiceUrl);
-        var builder = new UriBuilder(presignedUrl) { Scheme = publicUri.Scheme, Port = publicUri.Port };
-
-        return builder.Uri.ToString();
-    }
 
     public async Task<CreateUploadUrlResponse> CreateUploadUrl(CreateUploadUrlRequest request)
     {
@@ -49,21 +20,13 @@ public class DocumentService(
             throw new ArgumentException("ContentType is required");
 
         var storageKey = $"documents/{Guid.NewGuid()}/{request.FileName}";
-
-        using var presigningClient = CreatePresigningClient();
-        var uploadUrl = await presigningClient.GetPreSignedURLAsync(new GetPreSignedUrlRequest
-        {
-            BucketName = _objectStorageOptions.Bucket,
-            Key = storageKey,
-            Verb = HttpVerb.PUT,
-            ContentType = request.ContentType,
-            Expires = DateTime.UtcNow.Add(PresignedUrlLifetime)
-        });
+        var uploadTarget = await _objectStorageService.CreateUploadTarget(storageKey, request.ContentType, PresignedUrlLifetime);
 
         return new CreateUploadUrlResponse
         {
-            UploadUrl = EnforcePublicUrlScheme(uploadUrl),
-            StorageKey = storageKey
+            UploadUrl = uploadTarget.UploadUrl,
+            StorageKey = storageKey,
+            UploadHeaders = uploadTarget.Headers
         };
     }
 
@@ -108,16 +71,9 @@ public class DocumentService(
         if (document == null)
             return null;
 
-        using var presigningClient = CreatePresigningClient();
-        var downloadUrl = await presigningClient.GetPreSignedURLAsync(new GetPreSignedUrlRequest
-        {
-            BucketName = _objectStorageOptions.Bucket,
-            Key = document.StorageKey,
-            Verb = HttpVerb.GET,
-            Expires = DateTime.UtcNow.Add(PresignedUrlLifetime)
-        });
+        var downloadUrl = await _objectStorageService.CreateDownloadUrl(document.StorageKey, PresignedUrlLifetime);
 
-        return new DownloadUrlResponse { DownloadUrl = EnforcePublicUrlScheme(downloadUrl) };
+        return new DownloadUrlResponse { DownloadUrl = downloadUrl };
     }
 
     public async Task<bool> DeleteDocument(int id)
@@ -126,7 +82,7 @@ public class DocumentService(
         if (document == null)
             return false;
 
-        await _s3Client.DeleteObjectAsync(_objectStorageOptions.Bucket, document.StorageKey);
+        await _objectStorageService.Delete(document.StorageKey);
         return await _documentsRepository.Delete(id);
     }
 

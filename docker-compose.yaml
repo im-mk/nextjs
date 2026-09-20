@@ -57,11 +57,19 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=db;Port=${DB_INTERNAL_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
-      - ObjectStorage__ServiceUrl=http://garage:3900
-      - ObjectStorage__PublicServiceUrl=http://localhost:${GARAGE_S3_PORT}
-      - ObjectStorage__AccessKey=${GARAGE_DEFAULT_ACCESS_KEY}
-      - ObjectStorage__SecretKey=${GARAGE_DEFAULT_SECRET_KEY}
-      - ObjectStorage__Bucket=${GARAGE_DEFAULT_BUCKET}
+      - ObjectStorage__Provider=${OBJECT_STORAGE_PROVIDER}
+      - ObjectStorage__Azure__ServiceUri=http://azurite:10000/${AZURITE_ACCOUNT_NAME}
+      - ObjectStorage__Azure__PublicServiceUri=http://localhost:${AZURITE_BLOB_PORT}/${AZURITE_ACCOUNT_NAME}
+      - ObjectStorage__Azure__AccountName=${AZURITE_ACCOUNT_NAME}
+      - ObjectStorage__Azure__AccountKey=${AZURITE_ACCOUNT_KEY}
+      - ObjectStorage__Azure__Container=${OBJECT_STORAGE_CONTAINER}
+      - ObjectStorage__Aws__ServiceUrl=http://localstack:4566
+      - ObjectStorage__Aws__PublicServiceUrl=http://localhost:${LOCALSTACK_PORT}
+      - ObjectStorage__Aws__AccessKey=${AWS_ACCESS_KEY_ID}
+      - ObjectStorage__Aws__SecretKey=${AWS_SECRET_ACCESS_KEY}
+      - ObjectStorage__Aws__Bucket=${OBJECT_STORAGE_CONTAINER}
+      - ObjectStorage__Aws__Region=${AWS_REGION}
+      - ObjectStorage__Aws__ForcePathStyle=true
     ports:
       - ${EXTERNAL_PORT}:${INTERNAL_PORT}
     depends_on:
@@ -69,7 +77,9 @@ services:
         condition: service_healthy
       liquibase:
         condition: service_completed_successfully
-      garage:
+      azurite:
+        condition: service_started
+      localstack:
         condition: service_started
     networks:
       - network1
@@ -84,21 +94,30 @@ services:
       timeout: 3s
       retries: 5
 
-  garage:
-    container_name: garage
-    image: dxflrs/garage:v2.3.0
-    command: ["/garage", "server", "--single-node", "--default-bucket"]
-    environment:
-      - GARAGE_DEFAULT_ACCESS_KEY=${GARAGE_DEFAULT_ACCESS_KEY}
-      - GARAGE_DEFAULT_SECRET_KEY=${GARAGE_DEFAULT_SECRET_KEY}
-      - GARAGE_DEFAULT_BUCKET=${GARAGE_DEFAULT_BUCKET}
+  azurite:
+    container_name: azurite
+    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data
     volumes:
-      - ./garage/garage.toml:/etc/garage.toml
-      - garage-meta:/var/lib/garage/meta
-      - garage-data:/var/lib/garage/data
+      - azurite-data:/data
     ports:
-      - ${GARAGE_S3_PORT}:3900
-      - ${GARAGE_ADMIN_PORT}:3903
+      - ${AZURITE_BLOB_PORT}:10000
+    networks:
+      - network1
+    restart: unless-stopped
+
+  localstack:
+    container_name: localstack
+    image: localstack/localstack:4.8.0
+    environment:
+      SERVICES: s3
+      AWS_DEFAULT_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    ports:
+      - ${LOCALSTACK_PORT}:4566
+    volumes:
+      - localstack-data:/var/lib/localstack
     networks:
       - network1
     restart: unless-stopped
@@ -139,5 +158,5 @@ networks:
 volumes:
   db:
   pgadmin:
-  garage-meta:
-  garage-data:
+  azurite-data:
+  localstack-data:

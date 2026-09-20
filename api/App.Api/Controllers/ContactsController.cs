@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using App.Api.Models;
+using App.Api.Dto.Contacts;
 using App.Api.Services;
 
 namespace App.Api.Controllers;

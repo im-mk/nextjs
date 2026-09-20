@@ -1,4 +1,4 @@
-using App.Api.Models;
+using App.Api.Dto.Documents;
 
 namespace App.Api.Services;
 

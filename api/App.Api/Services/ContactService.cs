@@ -1,6 +1,7 @@
 using App.Api.Entities;
+using App.Api.Dto.Addresses;
+using App.Api.Dto.Contacts;
 using App.Api.Mappers;
-using App.Api.Models;
 using App.Api.Repositories;
 
 namespace App.Api.Services;

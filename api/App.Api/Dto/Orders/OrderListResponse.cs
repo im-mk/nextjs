@@ -1,4 +1,4 @@
-namespace App.Api.Models;
+namespace App.Api.Dto.Orders;
 
 public class OrderListResponse
 {

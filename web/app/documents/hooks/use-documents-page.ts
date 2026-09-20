@@ -113,12 +113,15 @@ export function useDocumentsPage(contactId?: number | null) {
         throw new Error("Failed to prepare the upload.");
       }
 
-      const { uploadUrl, storageKey } =
+      const { uploadUrl, storageKey, uploadHeaders } =
         (await uploadUrlResponse.json()) as CreateUploadUrlResponse;
 
       const putResponse = await fetch(uploadUrl, {
         method: "PUT",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
+        headers: {
+          "Content-Type": file.type || "application/octet-stream",
+          ...uploadHeaders,
+        },
         body: file,
       });
 

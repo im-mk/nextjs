@@ -17,6 +17,49 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
+            - name: Validate GitHub environment configuration
+              env:
+                  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+                  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+                  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+                  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+                  DB_ADMIN_PASSWORD: ${{ secrets.DB_ADMIN_PASSWORD }}
+                  GARAGE_ACCESS_KEY: ${{ secrets.GARAGE_ACCESS_KEY }}
+                  GARAGE_SECRET_KEY: ${{ secrets.GARAGE_SECRET_KEY }}
+                  GARAGE_RPC_SECRET: ${{ secrets.GARAGE_RPC_SECRET }}
+                  GARAGE_ADMIN_TOKEN: ${{ secrets.GARAGE_ADMIN_TOKEN }}
+              run: |
+                  missing=0
+
+                  require_secret() {
+                    if [ -z "$2" ]; then
+                      echo "Missing GitHub secret: $1"
+                      missing=1
+                    fi
+                  }
+
+                  require_variable() {
+                    if [ -z "$2" ]; then
+                      echo "Missing GitHub variable: $1"
+                      missing=1
+                    fi
+                  }
+
+                  require_secret "AZURE_CLIENT_ID" "$AZURE_CLIENT_ID"
+                  require_secret "AZURE_TENANT_ID" "$AZURE_TENANT_ID"
+                  require_secret "AZURE_SUBSCRIPTION_ID" "$AZURE_SUBSCRIPTION_ID"
+                  require_variable "AZURE_RESOURCE_GROUP" "$AZURE_RESOURCE_GROUP"
+                  require_secret "DB_ADMIN_PASSWORD" "$DB_ADMIN_PASSWORD"
+                  require_secret "GARAGE_ACCESS_KEY" "$GARAGE_ACCESS_KEY"
+                  require_secret "GARAGE_SECRET_KEY" "$GARAGE_SECRET_KEY"
+                  require_secret "GARAGE_RPC_SECRET" "$GARAGE_RPC_SECRET"
+                  require_secret "GARAGE_ADMIN_TOKEN" "$GARAGE_ADMIN_TOKEN"
+
+                  if [ "$missing" -ne 0 ]; then
+                    echo "Configure the missing values in GitHub -> Settings -> Environments -> production."
+                    exit 1
+                  fi
+
             - name: Log in to Azure
               uses: azure/login@v2
               with:

@@ -1,12 +1,9 @@
-using System.Data;
-using Amazon.Runtime;
-using Amazon.S3;
-using Amazon.S3.Model;
-using Npgsql;
 using App.Api.Options;
 using App.Api.Repositories;
 using App.Api.Services;
+using Npgsql;
 using Serilog;
+using System.Data;
 using ZiggyCreatures.Caching.Fusion;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,11 +29,14 @@ AddFusionCache(builder);
 AddObjectStorage(builder);
 
 builder.Services.AddHealthChecks();
-AddCors(builder);
+var allowedOrigins = GetAllowedOrigins(builder.Configuration);
+AddCors(builder, allowedOrigins);
 
 Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 var app = builder.Build();
+
+await ConfigureObjectStorageAsync(app, allowedOrigins);
 
 if (app.Environment.IsDevelopment())
 {
@@ -68,7 +68,6 @@ app.UseAuthorization();
 app.MapControllers();
 
 await app.StartAsync();
-await EnsureBucketCorsConfigured(app);
 await app.WaitForShutdownAsync();
 
 
@@ -91,15 +90,18 @@ static void AddFusionCache(WebApplicationBuilder builder)
         });
 }
 
-static void AddCors(WebApplicationBuilder builder)
+static string[] GetAllowedOrigins(ConfigurationManager configuration)
 {
-    var allowedOrigins = new[]
+    return new[]
     {
         "http://localhost:3000",
         "http://localhost:8090",
-        builder.Configuration["Cors:WebOrigin"] ?? string.Empty
+        configuration["Cors:WebOrigin"] ?? string.Empty
     }.Where(origin => !string.IsNullOrWhiteSpace(origin)).ToArray();
+}
 
+static void AddCors(WebApplicationBuilder builder, string[] allowedOrigins)
+{
     builder.Services.AddCors(options =>
     {
         options.AddDefaultPolicy(policy =>
@@ -110,6 +112,28 @@ static void AddCors(WebApplicationBuilder builder)
                   .WithExposedHeaders("X-Request-Id", "X-Total-Count", "X-Page", "X-Page-Size");
         });
     });
+}
+
+static async Task ConfigureObjectStorageAsync(WebApplication app, string[] allowedOrigins)
+{
+    if (!app.Environment.IsDevelopment())
+    {
+        return;
+    }
+
+    var storageService = app.Services.GetRequiredService<IObjectStorageService>();
+
+    if (storageService is not AzureObjectStorageService azureStorageService)
+    {
+        if (storageService is AwsObjectStorageService awsObjectStorageService)
+        {
+            await awsObjectStorageService.EnsureBucketAndCorsAsync(allowedOrigins);
+        }
+
+        return;
+    }
+
+    await azureStorageService.EnsureCorsAsync(allowedOrigins);
 }
 
 static void AddDomainDependencies(WebApplicationBuilder builder)
@@ -128,64 +152,14 @@ static void AddObjectStorage(WebApplicationBuilder builder)
     builder.Services.Configure<ObjectStorageOptions>(
         builder.Configuration.GetSection("ObjectStorage"));
 
-    builder.Services.AddSingleton<IAmazonS3>(sp =>
+    builder.Services.AddSingleton<IObjectStorageService>(sp =>
     {
         var options = builder.Configuration.GetSection("ObjectStorage").Get<ObjectStorageOptions>()
             ?? throw new InvalidOperationException("ObjectStorage configuration is missing");
 
-        return new AmazonS3Client(
-            new BasicAWSCredentials(options.AccessKey, options.SecretKey),
-            new AmazonS3Config
-            {
-                ServiceURL = options.ServiceUrl,
-                AuthenticationRegion = options.Region,
-                UseHttp = options.ServiceUrl.StartsWith("http://"),
-                ForcePathStyle = true
-            });
+        if (string.Equals(options.Provider, ObjectStorageProviders.Aws, StringComparison.OrdinalIgnoreCase))
+            return new AwsObjectStorageService(sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ObjectStorageOptions>>());
+
+        return new AzureObjectStorageService(sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ObjectStorageOptions>>());
     });
-}
-
-// Presigned PUT/GET requests from the browser trigger a CORS preflight, which Garage rejects unless the bucket has a CORS policy.
-static async Task EnsureBucketCorsConfigured(WebApplication app)
-{
-    var options = app.Configuration.GetSection("ObjectStorage").Get<ObjectStorageOptions>();
-    if (options == null || string.IsNullOrWhiteSpace(options.Bucket))
-        return;
-
-    using var scope = app.Services.CreateScope();
-    var s3Client = scope.ServiceProvider.GetRequiredService<IAmazonS3>();
-
-    try
-    {
-        await s3Client.PutCORSConfigurationAsync(new PutCORSConfigurationRequest
-        {
-            BucketName = options.Bucket,
-            Configuration = new CORSConfiguration
-            {
-                // Separate rules per origin: Garage echoes back the full AllowedOrigins list rather than matching
-                // a single origin when multiple origins share one rule, which browsers reject.
-                Rules =
-                [
-                    new CORSRule
-                    {
-                        AllowedOrigins = ["http://localhost:3000"],
-                        AllowedMethods = ["GET", "PUT", "POST", "DELETE", "HEAD"],
-                        AllowedHeaders = ["*"],
-                        MaxAgeSeconds = 3600
-                    },
-                    new CORSRule
-                    {
-                        AllowedOrigins = ["http://localhost:8090"],
-                        AllowedMethods = ["GET", "PUT", "POST", "DELETE", "HEAD"],
-                        AllowedHeaders = ["*"],
-                        MaxAgeSeconds = 3600
-                    }
-                ]
-            }
-        });
-    }
-    catch (Exception ex)
-    {
-        Log.Warning(ex, "Failed to configure CORS on the {Bucket} bucket", options.Bucket);
-    }
 }

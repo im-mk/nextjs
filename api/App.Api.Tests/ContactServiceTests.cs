@@ -1,5 +1,6 @@
 using App.Api.Entities;
-using App.Api.Models;
+using App.Api.Dto.Addresses;
+using App.Api.Dto.Contacts;
 using App.Api.Repositories;
 using App.Api.Services;
 using Moq;

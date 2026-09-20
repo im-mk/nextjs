@@ -1,4 +1,5 @@
-using App.Api.Models;
+using App.Api.Dto.Addresses;
+using App.Api.Entities;
 
 namespace App.Api.Mappers;
 
